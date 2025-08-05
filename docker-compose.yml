@@ -1,0 +1,7 @@
+services:
+  api:
+    build: .
+    ports:
+      - "9501:9501"
+    volumes:
+      - .:/app
