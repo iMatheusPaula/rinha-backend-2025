@@ -1,21 +1,24 @@
-FROM php:8.3-cli
+FROM php:8.4-cli
 
-# Instalar dependências para o swoole
 RUN apt-get update && apt-get install -y \
-    git \
     unzip \
     libcurl4-openssl-dev \
-    pkg-config \
     libssl-dev \
+    pkg-config \
+    libbrotli-dev \
     && pecl install swoole \
     && docker-php-ext-enable swoole
 
-# Copia o código para o container
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
 WORKDIR /app
+
+COPY composer.* ./
+
+RUN composer install
+
 COPY . .
 
-# Expõe a porta usada pelo Swoole
 EXPOSE 9501
 
-# Comando para rodar o servidor
 CMD ["php", "server.php"]

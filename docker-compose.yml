@@ -1,7 +1,27 @@
 services:
-  api:
+  app:
     build: .
     ports:
       - "9501:9501"
+    depends_on:
+      - redis
     volumes:
       - .:/app
+    networks:
+      - backend
+      - payment-processor
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+  payment-processor:
+    external: true
+  payment-processor-db:
+    external: true
