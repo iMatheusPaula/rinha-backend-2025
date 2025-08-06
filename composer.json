@@ -3,5 +3,10 @@
     "psr-4": {
       "App\\": "app/"
     }
+  },
+  "require": {
+    "php": "^8.4",
+    "ext-json": "*",
+    "ext-swoole": "*"
   }
 }
