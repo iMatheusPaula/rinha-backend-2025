@@ -14,11 +14,27 @@ $server->on("start", static function () {
 });
 
 $server->on("request", function (Request $request, Response $response) {
+    $redis = new Redis();
+    $redis->connect('redis');
+
     $method = $request->server['request_method'];
     $uri = $request->server['request_uri'];
 
     if ($method === 'POST' && $uri === '/payments') {
-        PaymentService::handler($request, $response);
+        $data = json_decode($request->rawContent());
+
+        if (!$data->correlationId || !$data->amount) {
+            $response->status(400);
+            $response->end("Bad Request");
+            return;
+        }
+
+        $redis->rpush('payments-queue', $data);
+        $dataResponse = json_encode($data);
+
+        $response->header('Content-Type', 'application/json');
+        $response->status(202);
+        $response->end($dataResponse);
     }
 
     $response->status(404);
