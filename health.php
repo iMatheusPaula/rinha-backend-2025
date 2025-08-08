@@ -1,25 +1,36 @@
 <?php
+
 require_once __DIR__ . '/vendor/autoload.php';
+
+use Swoole\Coroutine\Http\Client;
+
 
 function getServiceHealth(): array
 {
-    $host = 'payment-processor-default:8080';
-    $path = '/payments/service-health';
+    $host = 'payment-processor-default';
 
-    $request = curl_init($host.$path);
 
-    curl_setopt_array($request, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 5,
-        CURLOPT_CONNECTTIMEOUT => 5,
+    $client = new Client($host, 8080);
+    $client->set([
+        'timeout' => 5.0,
     ]);
 
-    $response = [];
+    $client->setHeaders([
+        'Host' => $host,
+        'Accept' => 'application/json'
+    ]);
 
-    if (! curl_errno($request)) {
-        $response = json_decode(curl_exec($request), false);
+    $response = $client->get("/payments/service-health");
+
+    $data = [];
+    if ($response && $client->statusCode >= 200 && $client->statusCode < 300) {
+        $decoded = json_decode($client->body, true);
+        if (is_array($decoded)) {
+            $data = $decoded;
+        }
     }
 
-    curl_close($request);
-    return (array)$response;
+    $client->close();
+
+    return $data;
 }

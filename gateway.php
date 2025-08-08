@@ -1,13 +1,8 @@
 <?php
+
 require_once __DIR__ . '/vendor/autoload.php';
 require 'health.php';
 
-$default = getServiceHealth();
-//while (true) {
-//    $default = getServiceHealth();
-//    var_dump($default);
-//    sleep(5);
-//}
 
 use Swoole\Coroutine;
 
@@ -45,7 +40,7 @@ function processPayment(array $data): bool
 
     try {
         $defaultProcessor = tryGateway($defaultUrl, $data, 20);
-        if( $defaultProcessor['status'] == 200 ) {
+        if ($defaultProcessor['status'] == 200) {
             savePayment($amount, 'default');
             saveProcessedPayment($defaultProcessor['body'], 'default');
             $processors['default']++;
@@ -75,10 +70,9 @@ function processPayment(array $data): bool
 
         return false;
     } catch (\Throwable $th) {
-        var_dump( "Error: ", $th);
+        var_dump("Error: ", $th);
         return false;
     }
-
 }
 
 function savePayment(float $amount, string $gateway): void
