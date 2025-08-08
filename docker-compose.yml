@@ -4,6 +4,8 @@ services:
     hostname: app-1
     environment:
       - REDIS_URL=redis:6379
+      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
+      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
     depends_on:
       - redis
     volumes:

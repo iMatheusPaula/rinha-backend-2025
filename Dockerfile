@@ -7,7 +7,9 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libbrotli-dev \
     && pecl install swoole \
-    && docker-php-ext-enable swoole
+    && docker-php-ext-enable swoole \
+    && pecl install redis \
+    && docker-php-ext-enable redis
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
