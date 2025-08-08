@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/vendor/autoload.php';
 
-function getServiceHealth()
+function getServiceHealth(): array
 {
     $host = 'payment-processor-default:8080';
     $path = '/payments/service-health';
@@ -21,5 +21,5 @@ function getServiceHealth()
     }
 
     curl_close($request);
-    return $response;
+    return (array)$response;
 }
