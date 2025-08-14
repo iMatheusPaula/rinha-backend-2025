@@ -1,11 +1,12 @@
 <?php
 
-require_once __DIR__ . '/vendor/autoload.php';
+declare(strict_types=1);
 
 use Swoole\Http\Server;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
-use App\PaymentService;
+
+$redis = null;
 
 $server = new Server("0.0.0.0", 9501);
 
@@ -13,10 +14,17 @@ $server->on("start", static function () {
     echo "Servidor Swoole rodando em http://localhost:9501\n";
 });
 
-$server->on("request", function (Request $request, Response $response) {
+$server->on("workerStart", static function (Server $server, int $workerId) {
+    global $redis;
+
+    echo "Worker #{$workerId} iniciado.\n";
+
     $redis = new Redis();
     $redis->connect('redis');
+});
 
+$server->on("request", function (Request $request, Response $response) use ($redis) {
+    global $redis;
     $method = $request->server['request_method'];
     $uri = $request->server['request_uri'];
 
@@ -29,12 +37,13 @@ $server->on("request", function (Request $request, Response $response) {
             return;
         }
 
-        $redis->rpush('payments-queue', $data);
-        $dataResponse = json_encode($data);
+        $dataEncode = json_encode($data);
+
+        $redis->lpush('payments-queue', $dataEncode);
 
         $response->header('Content-Type', 'application/json');
         $response->status(202);
-        $response->end($dataResponse);
+        $response->end($dataEncode);
     }
 
     $response->status(404);
