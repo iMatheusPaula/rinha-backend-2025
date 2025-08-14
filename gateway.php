@@ -31,7 +31,7 @@ $totalAmount = ['default' => 0, 'fallback' => 0];
 
 function processPayment(array $data): bool
 {
-    global $default, $processors, $totalAmount;
+    global $default, $processors, $totalAmount, $payments, $processedPayments;
 
     $amount = (float)$data['amount'];
 
@@ -42,7 +42,7 @@ function processPayment(array $data): bool
         $defaultProcessor = tryGateway($defaultUrl, $data, 20);
         if ($defaultProcessor['status'] == 200) {
             savePayment($amount, 'default');
-            saveProcessedPayment($defaultProcessor['body'], 'default');
+            saveProcessedPayment($data, 'default');
             $processors['default']++;
             $totalAmount['default'] += $amount;
             return true;
@@ -52,7 +52,7 @@ function processPayment(array $data): bool
             $response = tryGateway($fallbackUrl, $data, 10);
             if ($response['status'] == 200) {
                 savePayment($amount, 'fallback');
-                saveProcessedPayment($defaultProcessor['body'], 'fallback');
+                saveProcessedPayment($data, 'fallback');
                 $processors['fallback']++;
                 $totalAmount['fallback'] += $amount;
                 return true;
@@ -62,7 +62,7 @@ function processPayment(array $data): bool
         $response = tryGateway($fallbackUrl, $data, 30);
         if ($response['status'] == 200) {
             savePayment($amount, 'fallback');
-            saveProcessedPayment($defaultProcessor['body'], 'fallback');
+            saveProcessedPayment($data, 'fallback');
             $processors['fallback']++;
             $totalAmount['fallback'] += $amount;
             return true;
@@ -171,3 +171,6 @@ go(function () {
         Coroutine::sleep(1);
     }
 });
+
+// Iniciar o event loop do Swoole para gerenciar as corrotinas
+\Swoole\Event::wait();
