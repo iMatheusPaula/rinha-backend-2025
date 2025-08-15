@@ -2,13 +2,19 @@
 
 declare(strict_types=1);
 
-use Swoole\Http\Server;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
+use Swoole\Http\Server;
 
 $redis = null;
 
 $server = new Server("0.0.0.0", 9501);
+
+$server->set([
+    'open_tcp_nodelay' => true,
+    'log_level' => SWOOLE_LOG_WARNING,
+    'dispatch_mode' => 2,
+]);
 
 $server->on("start", static function () {
     echo "Servidor Swoole rodando em http://localhost:9501\n";
@@ -23,7 +29,7 @@ $server->on("workerStart", static function (Server $server, int $workerId) {
     $redis->connect('redis');
 });
 
-$server->on("request", function (Request $request, Response $response) use ($redis) {
+$server->on("request", function (Request $request, Response $response) {
     global $redis;
     $method = $request->server['request_method'];
     $uri = $request->server['request_uri'];
