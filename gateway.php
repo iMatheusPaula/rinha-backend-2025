@@ -1,25 +1,67 @@
 <?php
 
-require_once __DIR__ . '/vendor/autoload.php';
-require 'health.php';
+declare(strict_types=1);
 
+require_once 'health.php';
 
-use Swoole\Coroutine;
+use Swoole\Coroutine as Co;
+use Swoole\Database\RedisConfig;
+use Swoole\Database\RedisPool;
+use Swoole\Runtime;
 
-go(static function () {
-    global $default;
+Runtime::enableCoroutine();
+
+Co\run(function () {
+    $pool = new RedisPool(
+        (new RedisConfig)
+            ->withHost('redis')
+            ->withPort(6379)
+    );
+
     while (true) {
-        $default = getServiceHealth();
-        var_dump($default);
-        Coroutine::sleep(5); // sleep não bloqueante
+        try {
+            $redis = $pool->get();
+            $result = $redis->brPop('payments-queue', 0);
+
+            if (!$result) {
+                continue;
+            }
+
+            $payload = $result[1];
+
+            go(function () use ($payload) {
+                try {
+                    $data = json_decode($payload, true);
+
+                    $data['requestedAt'] = date('Y-m-d H:i:s');
+
+                    print_r($data);
+                } catch (\Throwable $th) {
+                    var_dump("Error: ", $th);
+                }
+            });
+        } catch
+        (Exception $exception) {
+            var_dump("Error: ", $exception->getMessage());
+        }
     }
 });
 
+
+//go(static function () {
+//    global $default;
+//    while (true) {
+//        $default = getServiceHealth();
+//        var_dump($default);
+//        Coroutine::sleep(5); // sleep não bloqueante
+//    }
+//});
+
 //salvar pagamentos - simular db
-$payments = [];
-$processedPayments = [];
-$processors = ['default' => 0, 'fallback' => 0];
-$totalAmount = ['default' => 0, 'fallback' => 0];
+//$payments = [];
+//$processedPayments = [];
+//$processors = ['default' => 0, 'fallback' => 0];
+//$totalAmount = ['default' => 0, 'fallback' => 0];
 
 // primeiro vamos mandar a requisicao para o gateway padrao, e aguardar no maximo 20 ms;
 // se retornar 200, vamos salvar no banco de dados
@@ -155,22 +197,19 @@ $mockPayment = [
 //$result = processPayment($mockPayment);
 //var_dump($result);
 
-go(function () {
-    global $default, $processors, $totalAmount, $payments, $processedPayments;
-
-    $mockPayment = [
-        'correlationId' => uniqid('', true),
-        "amount" => 10.00,
-        'createAt' => date('Y-m-d H:i:s')
-    ];
-
-    while (true) {
-        $result = processPayment($mockPayment);
-        var_dump($result);
-        var_dump($processors, $totalAmount, $payments, $processedPayments);
-        Coroutine::sleep(1);
-    }
-});
-
-// Iniciar o event loop do Swoole para gerenciar as corrotinas
-\Swoole\Event::wait();
+//go(function () {
+//    global $default, $processors, $totalAmount, $payments, $processedPayments;
+//
+//    $mockPayment = [
+//        'correlationId' => uniqid('', true),
+//        "amount" => 10.00,
+//        'createAt' => date('Y-m-d H:i:s')
+//    ];
+//
+//    while (true) {
+//        $result = processPayment($mockPayment);
+//        var_dump($result);
+//        var_dump($processors, $totalAmount, $payments, $processedPayments);
+//        Coroutine::sleep(1);
+//    }
+//});
