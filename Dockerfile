@@ -1,26 +1,22 @@
 FROM php:8.4-cli
 
 RUN apt-get update && apt-get install -y \
+    supervisor \
     unzip \
     libcurl4-openssl-dev \
     libssl-dev \
     pkg-config \
-    libbrotli-dev \
-    && pecl install swoole \
-    && docker-php-ext-enable swoole \
-    && pecl install redis \
-    && docker-php-ext-enable redis
+    libbrotli-dev
 
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+RUN pecl install swoole redis \
+    && docker-php-ext-enable swoole redis
+
+COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 WORKDIR /app
 
-COPY composer.* ./
-
-RUN composer install
-
-COPY . .
+COPY ./app .
 
 EXPOSE 9501
 
-CMD ["php", "server.php"]
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]

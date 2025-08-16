@@ -9,7 +9,7 @@ services:
     depends_on:
       - redis
     volumes:
-      - .:/app
+      - ./app:/app
     networks:
       - backend
       - payment-processor
