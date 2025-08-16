@@ -53,10 +53,10 @@ Co\run(function () {
                     ]);
 
                     $reportKey = "report:{$bestProcessor}";
-                    $amount = (float)$data['amount'];
+                    $amount = (int)($data['amount'] * 100);
 
                     $redis->hIncrBy($reportKey, 'totalRequests', 1);
-                    $redis->hIncrByFloat($reportKey, 'totalAmount', $amount);
+                    $redis->hIncrBy($reportKey, 'totalAmount', $amount);
                 } elseif ($client->statusCode !== 422) {
                     //retry ou voltar pra fila ?
                     var_dump([

@@ -74,13 +74,20 @@ $server->on("request", function (Request $request, Response $response) {
             $data = $redis->hGetAll($reportKey);
             $report[$processor] = [
                 'totalRequests' => (int)($data['totalRequests'] ?? 0),
-                'totalAmount' => (float)($data['totalAmount'] ?? 0.00),
+                'totalAmount' => (float)(($data['totalAmount'] ?? 0) / 100),
             ];
         }
 
         $response->header('Content-Type', 'application/json');
         $response->status(200);
         $response->end(json_encode($report));
+    }
+
+    if ($method === 'POST' && $uri === '/purge-payments') {
+        $redis->flushAll();
+
+        $response->status(204);
+        $response->end();
     }
 
     $response->status(404);
