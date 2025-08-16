@@ -43,6 +43,13 @@ $server->on("request", function (Request $request, Response $response) {
             return;
         }
 
+        if (!(float)$data->amount || !(string)$data->correlationId) {
+            $response->status(422);
+            $response->end("Unprocessable Entity");
+            return;
+        }
+
+        $data->amount = number_format($data->amount, 2);
         $dataEncode = json_encode($data);
 
         $redis->lpush('payments-queue', $dataEncode);
