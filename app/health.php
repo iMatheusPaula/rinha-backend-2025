@@ -2,48 +2,41 @@
 
 declare(strict_types=1);
 
-use Swoole\Coroutine as Co;
 use Swoole\Coroutine\Http\Client;
 use Swoole\Coroutine\WaitGroup;
-use Swoole\Runtime;
+use Swoole\Coroutine;
 
-const PROCESSORS = [
-    'default',
-    'fallback'
-];
+use function Swoole\Coroutine\run;
 
-Runtime::enableCoroutine();
+run(static function () {
+    echo "[HealthChecker] Started.\n";
 
-Co\run(function () {
     $redis = new Redis();
     $redis->connect('redis');
-
-    echo "[HealthChecker] Iniciado. Verificando a cada 5s.\n";
 
     while (true) {
         $waitGroup = new WaitGroup();
         $response = [];
 
-        foreach (PROCESSORS as $name) {
+        foreach (['default', 'fallback'] as $processor) {
             $waitGroup->add();
+            go(static function () use ($processor, $waitGroup, &$response) {
+                try {
+                    $client = new Client("payment-processor-{$processor}", 8080);
+                    $client->get('/payments/service-health');
+                    $client->close();
 
-            go(static function () use ($name, $waitGroup, &$response) {
-                $client = new Client("payment-processor-{$name}", 8080);
-                $client->get('/payments/service-health');
-                $client->close();
+                    if ($client->statusCode !== 200) {
+                        throw new \Exception("{$processor} failed with status code {$client->statusCode}");
+                    }
 
-                $body = json_decode($client->body, true, 512, JSON_THROW_ON_ERROR);
-
-                if ($client->statusCode === 200) {
-                    $response[$name] = $body;
+                    $response[$processor] = json_decode($client->body, true, 512, JSON_THROW_ON_ERROR);
+                } catch (Exception $exception) {
+                    $response[$processor] = ["failing" => true, "minResponseTime" => INF];
+                    echo "[HealthChecker]" . $exception->getMessage() . PHP_EOL;
+                } finally {
+                    $waitGroup->done();
                 }
-
-                var_dump([
-                    'status' => $client->statusCode,
-                    'body' => $client->body,
-                ]);
-
-                $waitGroup->done();
             });
         }
         $waitGroup->wait();
@@ -68,6 +61,6 @@ Co\run(function () {
         $redis->set('best-processor', $bestProcessor);
 
         // melhorar esse tempo talvez salvando o tempo + 5s
-        Co::sleep(1);
+        Coroutine::sleep(1);
     }
 });
