@@ -1,36 +1,73 @@
 <?php
 
-require_once __DIR__ . '/vendor/autoload.php';
+declare(strict_types=1);
 
+use Swoole\Coroutine as Co;
 use Swoole\Coroutine\Http\Client;
+use Swoole\Coroutine\WaitGroup;
+use Swoole\Runtime;
 
+const PROCESSORS = [
+    'default',
+    'fallback'
+];
 
-function getServiceHealth(): array
-{
-    $host = 'payment-processor-default';
+Runtime::enableCoroutine();
 
+Co\run(function () {
+    $redis = new Redis();
+    $redis->connect('redis');
 
-    $client = new Client($host, 8080);
-    $client->set([
-        'timeout' => 5.0,
-    ]);
+    echo "[HealthChecker] Iniciado. Verificando a cada 5s.\n";
 
-    $client->setHeaders([
-        'Host' => $host,
-        'Accept' => 'application/json'
-    ]);
+    while (true) {
+        $waitGroup = new WaitGroup();
+        $response = [];
 
-    $response = $client->get("/payments/service-health");
+        foreach (PROCESSORS as $name) {
+            $waitGroup->add();
 
-    $data = [];
-    if ($response && $client->statusCode >= 200 && $client->statusCode < 300) {
-        $decoded = json_decode($client->body, true);
-        if (is_array($decoded)) {
-            $data = $decoded;
+            go(static function () use ($name, $waitGroup, &$response) {
+                $client = new Client("payment-processor-{$name}", 8080);
+                $client->get('/payments/service-health');
+                $client->close();
+
+                $body = json_decode($client->body, true, 512, JSON_THROW_ON_ERROR);
+
+                if ($client->statusCode === 200) {
+                    $response[$name] = $body;
+                }
+
+                var_dump([
+                    'status' => $client->statusCode,
+                    'body' => $client->body,
+                ]);
+
+                $waitGroup->done();
+            });
         }
+        $waitGroup->wait();
+
+        $default = $response['default'];
+        $fallback = $response['fallback'];
+
+        $bestProcessor = 'default';
+
+        if ($default['failing'] === true && $fallback['failing'] === false) {
+            $bestProcessor = 'fallback';
+        } elseif ($fallback['failing'] === false) {
+            if ($default['minResponseTime'] > ($fallback['minResponseTime'] * 1.5)) {
+                $bestProcessor = 'fallback';
+            }
+        }
+
+        echo "[HealthChecker] Default (Failing: " . ($default['failing'] ? 'Yes' : 'No') . ", Time: {$default['minResponseTime']}ms), ";
+        echo "Fallback (Failing: " . ($fallback['failing'] ? 'Yes' : 'No') . ", Time: {$fallback['minResponseTime']}ms). ";
+        echo "Best Processor: '{$bestProcessor}'.\n";
+
+        $redis->set('best-processor', $bestProcessor);
+
+        // melhorar esse tempo talvez salvando o tempo + 5s
+        Co::sleep(1);
     }
-
-    $client->close();
-
-    return $data;
-}
+});
