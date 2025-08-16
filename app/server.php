@@ -60,13 +60,20 @@ $server->on("request", function (Request $request, Response $response) {
         // entao la na fila tem que pegar esse dado que alguem quer ver e pausar a fila
         // resumindo so vai rodar a fila se ninguem quiser ver o sumario
         // depois que enviar o sumario salva que ja mostrou e volta a fila ao normal
-        $processorName = 'default';
-        $reportKey = "report:{$processorName}";
-        $data = $redis->hGetAll($reportKey);
+
+        $report = [];
+        foreach (['default', 'fallback'] as $processor) {
+            $reportKey = "report:{$processor}";
+            $data = $redis->hGetAll($reportKey);
+            $report[$processor] = [
+                'totalRequests' => (int)($data['totalRequests'] ?? 0),
+                'totalAmount' => (float)($data['totalAmount'] ?? 0.00),
+            ];
+        }
 
         $response->header('Content-Type', 'application/json');
         $response->status(200);
-        $response->end(json_encode($data));
+        $response->end(json_encode($report));
     }
 
     $response->status(404);
