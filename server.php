@@ -52,6 +52,23 @@ $server->on("request", function (Request $request, Response $response) {
         $response->end($dataEncode);
     }
 
+    if ($method === 'GET' && $uri === '/payments-summary') {
+        // verificar se tem algo na fila de processamento 'payments-queue' antes de chamar o sumario
+        // pq se nao pode dar multa
+        // se tiver mesmo que esperar parar a fila, talvez vai ter que colocar algo aqui
+        // pra salvar no redis falando que alguem quer o relatorio
+        // entao la na fila tem que pegar esse dado que alguem quer ver e pausar a fila
+        // resumindo so vai rodar a fila se ninguem quiser ver o sumario
+        // depois que enviar o sumario salva que ja mostrou e volta a fila ao normal
+        $processorName = 'default';
+        $reportKey = "report:{$processorName}";
+        $data = $redis->hGetAll($reportKey);
+
+        $response->header('Content-Type', 'application/json');
+        $response->status(200);
+        $response->end(json_encode($data));
+    }
+
     $response->status(404);
     $response->end("Not found");
 });
