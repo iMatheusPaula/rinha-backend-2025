@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-require_once 'health.php';
-
 use Swoole\Coroutine as Co;
+use Swoole\Coroutine\Http\Client;
 use Swoole\Database\RedisConfig;
 use Swoole\Database\RedisPool;
 use Swoole\Runtime;
@@ -29,15 +28,41 @@ Co\run(function () {
 
             $payload = $result[1];
 
-            go(function () use ($payload) {
-                try {
-                    $data = json_decode($payload, true);
+            go(function () use ($payload, $redis, $pool) {
+                $data = json_decode($payload, true);
 
-                    $data['requestedAt'] = date('Y-m-d H:i:s');
+                $pool->get();
+                $bestProcessor = $redis->get('best-processor') ?? 'default';
 
-                    print_r($data);
-                } catch (\Throwable $th) {
-                    var_dump("Error: ", $th);
+                echo "[Job] Decisão do Health Checker: Usar '{$bestProcessor}'.\n";
+
+                $client = new Client("payment-processor-{$bestProcessor}", 8080);
+                $client->setHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ]);
+
+                $data['requestedAt'] = gmdate("Y-m-d\TH:i:s.000\Z");
+
+                $client->post('/payments', json_encode($data));
+
+                if ($client->statusCode === 200) {
+                    var_dump([
+                        'status' => $client->statusCode,
+                        'body' => $client->body,
+                    ]);
+
+                    $reportKey = "report:{$bestProcessor}";
+                    $amount = (float)$data['amount'];
+
+                    $redis->hIncrBy($reportKey, 'totalRequests', 1);
+                    $redis->hIncrByFloat($reportKey, 'totalAmount', $amount);
+                } elseif ($client->statusCode !== 422) {
+                    //retry ou voltar pra fila ?
+                    var_dump([
+                        'status' => $client->statusCode,
+                        'body' => $client->body,
+                    ]);
                 }
             });
         } catch
