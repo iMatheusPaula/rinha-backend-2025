@@ -9,10 +9,15 @@ use Swoole\Coroutine;
 use function Swoole\Coroutine\run;
 
 run(static function () {
-    echo "[HealthChecker] Started.\n";
+    try {
+        $redis = new Redis();
+        $redis->connect('redis');
+    } catch (\RedisException $e) {
+        echo "[HealthChecker][Error] connecting to Redis: " . $e->getMessage() . "\n";
+        return;
+    }
 
-    $redis = new Redis();
-    $redis->connect('redis');
+    echo "[HealthChecker] Started.\n";
 
     while (true) {
         $waitGroup = new WaitGroup();
@@ -23,6 +28,7 @@ run(static function () {
             go(static function () use ($processor, $waitGroup, &$response) {
                 try {
                     $client = new Client("payment-processor-{$processor}", 8080);
+                    $client->set(['timeout' => 3]);
                     $client->get('/payments/service-health');
                     $client->close();
 
@@ -35,6 +41,9 @@ run(static function () {
                     $response[$processor] = ["failing" => true, "minResponseTime" => INF];
                     echo "[HealthChecker]" . $exception->getMessage() . PHP_EOL;
                 } finally {
+                    if (isset($client)) {
+                        $client->close();
+                    }
                     $waitGroup->done();
                 }
             });
@@ -58,9 +67,12 @@ run(static function () {
         echo "Fallback (Failing: " . ($fallback['failing'] ? 'Yes' : 'No') . ", Time: {$fallback['minResponseTime']}ms). ";
         echo "Best Processor: '{$bestProcessor}'.\n";
 
-        $redis->set('best-processor', $bestProcessor);
+        try {
+            $redis->setex('processor', 8, $bestProcessor);
+        } catch (\RedisException $e) {
+            echo "[HealthChecker] Error saving to Redis: " . $e->getMessage() . "\n";
+        }
 
-        // melhorar esse tempo talvez salvando o tempo + 5s
-        Coroutine::sleep(1);
+        Coroutine::sleep(5);
     }
 });
