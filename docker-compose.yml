@@ -22,6 +22,7 @@ services:
   app-2:
     <<: *app
     hostname: app-2
+    command: /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
 
   redis:
     image: redis:8.2-alpine

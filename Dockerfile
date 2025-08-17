@@ -12,6 +12,7 @@ RUN pecl install swoole redis \
     && docker-php-ext-enable swoole redis
 
 COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY ./supervisord.health.conf /etc/supervisor/conf.d/supervisord.health.conf
 
 WORKDIR /app
 
@@ -19,4 +20,4 @@ COPY ./app .
 
 EXPOSE 9501
 
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.health.conf"]
