@@ -1,18 +1,27 @@
+x-service-templates:
+  &app
+  build: .
+  depends_on:
+    - redis
+  volumes:
+    - ./app:/app
+  networks:
+    - backend
+    - payment-processor
+  deploy:
+    resources:
+      limits:
+        cpus: "0.6"
+        memory: "90MB"
+
 services:
   app-1:
-    build: .
+    <<: *app
     hostname: app-1
-    environment:
-      - REDIS_URL=redis:6379
-      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
-      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
-    depends_on:
-      - redis
-    volumes:
-      - ./app:/app
-    networks:
-      - backend
-      - payment-processor
+
+  app-2:
+    <<: *app
+    hostname: app-2
 
   redis:
     image: redis:8.2-alpine
@@ -20,6 +29,11 @@ services:
       - "6379:6379"
     networks:
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: "20MB"
 
   web:
     image: nginx:1.28-alpine
@@ -31,6 +45,11 @@ services:
       - backend
     depends_on:
       - app-1
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: "150MB"
 
 networks:
   backend:
