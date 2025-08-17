@@ -1,12 +1,17 @@
-# rinha-backend-2025
-tentando participar da rinha
+# Rinha Backend 2025
+Tentando participar da [rinha](https://github.com/zanfranceschi/rinha-de-backend-2025/tree/main?tab=readme-ov-file).
+Tentamos usar o método Circuit Breaker para verificar qual o melhor processador de pagamentos.
+Também usamos o Swoole\Coroutine, Swoole\Coroutine\Http\Client, Redis pool e http pool para melhorar o desempenho nos processamentos.
 
-# Notes
 
-Usar metodo Circuit Breaker para verificar qual provedor de pagamentos usar.
-Ver sobre Swoole\Table e Swoole\Process\Pool pra salvar o melhor procesador e worker de payments conseguir acessar.
+# Tecnologias utilizadas
+- linguagem: PHP 8.4 + Swoole
+- storage: Redis
+- load balancer: Nginx
+- infra: Docker
 
-# Documentacões útilizadas
+# Como rodar
 
-https://wiki.swoole.com/en/
-https://www.php.net/manual/pt_BR/function.gmdate.php
+```
+ 
+```
