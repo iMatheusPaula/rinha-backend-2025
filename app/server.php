@@ -34,6 +34,7 @@ $server->on("request", function (Request $request, Response $response) {
     $method = $request->server['request_method'];
     $uri = $request->server['request_uri'];
 
+    //payments
     if ($method === 'POST' && $uri === '/payments') {
         $data = json_decode($request->rawContent());
 
@@ -59,6 +60,7 @@ $server->on("request", function (Request $request, Response $response) {
         $response->end($dataEncode);
     }
 
+    //summary
     if ($method === 'GET' && $uri === '/payments-summary') {
         // verificar se tem algo na fila de processamento 'payments-queue' antes de chamar o sumario
         // pq se nao pode dar multa
@@ -83,6 +85,7 @@ $server->on("request", function (Request $request, Response $response) {
         $response->end(json_encode($report));
     }
 
+    //purge
     if ($method === 'POST' && $uri === '/purge-payments') {
         $redis->flushAll();
 
