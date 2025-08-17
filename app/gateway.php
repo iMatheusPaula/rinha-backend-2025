@@ -44,7 +44,7 @@ Co\run(function () {
                     'Accept' => 'application/json'
                 ]);
                 $client->set([
-                    'timeout' => 1,
+                    'timeout' => 1.0, //pode ser necessario alterar
                 ]);
 
                 $data['requestedAt'] = gmdate("Y-m-d\TH:i:s.000\Z");
