@@ -55,24 +55,27 @@ run(static function () {
 
         $bestProcessor = 'default';
 
+        $bothFailing = ($default['failing'] === true && $fallback['failing'] === true);
+
         if ($default['failing'] === true && $fallback['failing'] === false) {
             $bestProcessor = 'fallback';
-        } elseif ($fallback['failing'] === false) {
-            if ($default['minResponseTime'] > ($fallback['minResponseTime'] * 1.5)) {
-                $bestProcessor = 'fallback';
-            }
+        } elseif ($fallback['failing'] === false && ($default['minResponseTime'] > ($fallback['minResponseTime'] * 1.95))) {
+            $bestProcessor = 'fallback';
         }
 
         echo "[HealthChecker] Default (Failing: " . ($default['failing'] ? 'Yes' : 'No') . ", Time: {$default['minResponseTime']}ms), ";
         echo "Fallback (Failing: " . ($fallback['failing'] ? 'Yes' : 'No') . ", Time: {$fallback['minResponseTime']}ms). ";
         echo "Best Processor: '{$bestProcessor}'.\n";
 
+        $sleepTime = $bothFailing ? 1 : 5;
+        $redisTTL = $bothFailing ? 4 : 8;
+
         try {
-            $redis->setex('processor', 8, $bestProcessor);
+            $redis->setex('processor', $redisTTL, $bestProcessor);
         } catch (\RedisException $e) {
             echo "[HealthChecker] Error saving to Redis: " . $e->getMessage() . "\n";
         }
 
-        Coroutine::sleep(5);
+        Coroutine::sleep($sleepTime);
     }
 });
