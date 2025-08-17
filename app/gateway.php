@@ -6,7 +6,6 @@ use Swoole\Coroutine\Http\Client;
 use Swoole\Database\RedisConfig;
 use Swoole\Database\RedisPool;
 use Swoole\Runtime;
-use Swoole\Coroutine;
 
 use function Swoole\Coroutine\run;
 
@@ -21,11 +20,8 @@ run(function () {
 
     while (true) {
         $redis = $pool->get();
-
-        $result = $redis->brPop('payments-queue', 0);
-        $bestProcessor = $redis->get('best-processor');
+        $result = $redis->brPop('payments-queue', 5);
         $pool->put($redis);
-
 
         if (!$result) {
             continue;
@@ -34,7 +30,11 @@ run(function () {
         $payload = $result[1];
         $data = json_decode($payload, true);
 
-        go(function () use ($data, $pool, $payload, $bestProcessor) {
+        go(function () use ($data, $pool, $payload) {
+            $redis = $pool->get();
+            $bestProcessor = $redis->get('processor') ?? 'default';
+            $pool->put($redis);
+
             $client = new Client("payment-processor-{$bestProcessor}", 8080);
             $client->setHeaders([
                 'Content-Type' => 'application/json',
@@ -45,24 +45,24 @@ run(function () {
 
             $client->post('/payments', json_encode($data));
 
-            $redis2 = $pool->get();
             if ($client->statusCode === 200) {
-                $amount = (int)($data['amount'] * 100);
+                $amount = (int)($data['amount'] * 100); // convert to cents
 
-                $redis2->multi()
+                $redis = $pool->get();
+                $redis->multi()
                     ->hIncrBy("report:{$bestProcessor}", 'totalRequests', 1)
                     ->hIncrBy("report:{$bestProcessor}", 'totalAmount', $amount)
                     ->exec();
+                $pool->put($redis);
 
-                var_dump([
-                    'status' => $client->statusCode,
-                    'body' => $client->body,
-                ]);
+                echo "[Job] Pagamento processado com sucesso. Status: {$client->statusCode}, body: {$client->body}\n";
             } else {
                 echo "[Job][Error] Pagamento recolocado na fila. Status: {$client->statusCode}, body: {$client->body}\n";
-                $redis2->rPush('payments-queue', $payload);
+
+                $redis = $pool->get();
+                $redis->rPush('payments-queue', $payload);
+                $pool->put($redis);
             }
-            $pool->put($redis2);
         });
     }
 });
