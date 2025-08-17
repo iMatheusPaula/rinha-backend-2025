@@ -75,7 +75,6 @@ Co\run(function () {
                 }
             });
         } catch (Exception $exception) {
-//            global $redis;
             var_dump("Error: ", $exception->getMessage());
             $pool->put($redis); // Devolve a conexão ao pool
             continue;
