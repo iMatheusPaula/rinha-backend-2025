@@ -50,33 +50,46 @@ $server->on("request", function (Request $request, Response $response) {
             return;
         }
 
-        $data->amount = number_format($data->amount, 2);
         $dataEncode = json_encode($data);
 
         $redis->lpush('payments-queue', $dataEncode);
 
-        $response->header('Content-Type', 'application/json');
         $response->status(202);
-        $response->end($dataEncode);
+        $response->end();
     }
 
     //summary
     if ($method === 'GET' && $uri === '/payments-summary') {
-        // verificar se tem algo na fila de processamento 'payments-queue' antes de chamar o sumario
-        // pq se nao pode dar multa
-        // se tiver mesmo que esperar parar a fila, talvez vai ter que colocar algo aqui
-        // pra salvar no redis falando que alguem quer o relatorio
-        // entao la na fila tem que pegar esse dado que alguem quer ver e pausar a fila
-        // resumindo so vai rodar a fila se ninguem quiser ver o sumario
-        // depois que enviar o sumario salva que ja mostrou e volta a fila ao normal
+        parse_str($request->server['query_string'] ?? '', $queryParams);
+
+        $minScore = '-inf';
+        $maxScore = '+inf';
+        if (!empty($queryParams['from'])) {
+            $minScore = (float)new DateTimeImmutable($queryParams['from'])->format('U.v');
+        }
+        if (!empty($queryParams['to'])) {
+            $maxScore = (float)new DateTimeImmutable($queryParams['to'])->format('U.v');
+        }
 
         $report = [];
-        foreach (['default', 'fallback'] as $processor) {
-            $reportKey = "report:{$processor}";
-            $data = $redis->hGetAll($reportKey);
-            $report[$processor] = [
-                'totalRequests' => (int)($data['totalRequests'] ?? 0),
-                'totalAmount' => (float)(($data['totalAmount'] ?? 0) / 100),
+        foreach (['default', 'fallback'] as $processorName) {
+            $reportKey = "payments-summary-{$processorName}";
+
+            $logEntries = $redis->zRangeByScore($reportKey, (string)$minScore, (string)$maxScore);
+
+            $totalRequests = 0;
+            $totalAmountInCents = 0;
+
+            foreach ($logEntries as $entry) {
+                // "correlationId:amountInCents"
+                $parts = explode(':', $entry);
+                $totalRequests++;
+                $totalAmountInCents += (int)$parts[1];
+            }
+
+            $report[$processorName] = [
+                'totalRequests' => $totalRequests,
+                'totalAmount' => (float)($totalAmountInCents / 100),
             ];
         }
 

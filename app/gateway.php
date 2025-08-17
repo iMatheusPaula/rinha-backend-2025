@@ -6,6 +6,7 @@ use Swoole\Coroutine\Http\Client;
 use Swoole\Database\RedisConfig;
 use Swoole\Database\RedisPool;
 use Swoole\Runtime;
+use Swoole\Coroutine\Channel;
 
 use function Swoole\Coroutine\run;
 
@@ -17,6 +18,19 @@ run(function () {
             ->withHost('redis')
             ->withPort(6379)
     );
+
+    $httpPools = [
+        'default' => new Channel(5),
+        'fallback' => new Channel(5)
+    ];
+
+    foreach ($httpPools as $name => $httpPool) {
+        for ($i = 0; $i < 5; $i++) {
+            $client = new Client("payment-processor-{$name}", 8080);
+            $client->set(['keep_alive' => true]);
+            $httpPool->push($client);
+        }
+    }
 
     while (true) {
         $redis = $pool->get();
@@ -30,38 +44,47 @@ run(function () {
         $payload = $result[1];
         $data = json_decode($payload, true);
 
-        go(function () use ($data, $pool, $payload) {
+        go(function () use ($data, $pool, $payload, $httpPools) {
             $redis = $pool->get();
             $bestProcessor = $redis->get('processor') ?? 'default';
             $pool->put($redis);
 
-            $client = new Client("payment-processor-{$bestProcessor}", 8080);
-            $client->setHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ]);
+            try {
+                $client = $httpPools[$bestProcessor]->pop();
+                $client->setHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ]);
 
-            $data['requestedAt'] = gmdate("Y-m-d\TH:i:s.000\Z");
+                $now = new DateTime;
 
-            $client->post('/payments', json_encode($data));
+                $data['requestedAt'] = $now->format('Y-m-d\TH:i:s.v\Z');
 
-            if ($client->statusCode === 200) {
-                $amount = (int)($data['amount'] * 100); // convert to cents
+                $client->post('/payments', json_encode($data));
 
-                $redis = $pool->get();
-                $redis->multi()
-                    ->hIncrBy("report:{$bestProcessor}", 'totalRequests', 1)
-                    ->hIncrBy("report:{$bestProcessor}", 'totalAmount', $amount)
-                    ->exec();
-                $pool->put($redis);
+                if ($client->statusCode === 200) {
+                    $amount = (int)($data['amount'] * 100); // convert to cents
 
-                echo "[Job] Pagamento processado com sucesso. Status: {$client->statusCode}, body: {$client->body}\n";
-            } else {
-                echo "[Job][Error] Pagamento recolocado na fila. Status: {$client->statusCode}, body: {$client->body}\n";
+                    $redis = $pool->get();
+                    $redis->zAdd(
+                        "payments-summary-{$bestProcessor}",
+                        (float)$now->format('U.v'),
+                        "{$data['correlationId']}:{$amount}"
+                    );
+                    $pool->put($redis);
 
-                $redis = $pool->get();
-                $redis->rPush('payments-queue', $payload);
-                $pool->put($redis);
+                    echo "[Job] Pagamento processado com sucesso. Status: {$client->statusCode}, body: {$client->body}\n";
+                } elseif ($client->statusCode !== 422) {
+                    echo "[Job][Error] Pagamento recolocado na fila. Status: {$client->statusCode}, body: {$client->body}\n";
+
+                    $redis = $pool->get();
+                    $redis->lPush('payments-queue', $payload);
+                    $pool->put($redis);
+                } else {
+                    echo "[Job][Error] Status: {$client->statusCode}, body: {$client->body}\n";
+                }
+            } finally {
+                $httpPools[$bestProcessor]->push($client);
             }
         });
     }
