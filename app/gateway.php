@@ -46,7 +46,12 @@ run(function () {
 
         go(function () use ($data, $pool, $payload, $httpPools) {
             $redis = $pool->get();
-            $bestProcessor = $redis->get('processor') ?? 'default';
+            $bestProcessor = $redis->get('processor');
+
+            if (empty($bestProcessor)) {
+                $bestProcessor = 'default';
+            }
+
             $pool->put($redis);
 
             try {
@@ -84,7 +89,9 @@ run(function () {
                     echo "[Job][Error] Status: {$client->statusCode}, body: {$client->body}\n";
                 }
             } finally {
-                $httpPools[$bestProcessor]->push($client);
+                if ($client) {
+                    $httpPools[$bestProcessor]->push($client);
+                }
             }
         });
     }

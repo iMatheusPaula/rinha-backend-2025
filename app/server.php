@@ -36,23 +36,7 @@ $server->on("request", function (Request $request, Response $response) {
 
     //payments
     if ($method === 'POST' && $uri === '/payments') {
-        $data = json_decode($request->rawContent());
-
-        if (!$data->correlationId || !$data->amount) {
-            $response->status(400);
-            $response->end("Bad Request");
-            return;
-        }
-
-        if (!(float)$data->amount || !(string)$data->correlationId) {
-            $response->status(422);
-            $response->end("Unprocessable Entity");
-            return;
-        }
-
-        $dataEncode = json_encode($data);
-
-        $redis->lpush('payments-queue', $dataEncode);
+        $redis->lpush('payments-queue', $request->rawContent());
 
         $response->status(202);
         $response->end();
